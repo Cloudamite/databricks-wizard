@@ -1,0 +1,57 @@
+name: Release
+
+# Run by hand to release the plugin. On main: check the version, validate the
+# plugin and run the smoke checks, then tag the tested commit v<version> and
+# create a draft release on it. A maintainer reads the draft and publishes it in
+# GitHub; publishing is permanent, and is what offers the version to users (see
+# released.yml). On any other branch it checks and drafts nothing.
+#
+# The version is `version` in .claude-plugin/plugin.json. A published version
+# can never be released again: raise it to release anew.
+#
+# Every decision is .github/release.py's; the jobs only call it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/release.py check
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.317
+
+      - name: Validate the plugin and its marketplace
+        run: claude plugin validate --strict .
+
+  smoke:
+    uses: ./.github/workflows/smoke.yml
+
+  draft:
+    needs: [checks, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag the tested commit and draft its release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/release.py draft

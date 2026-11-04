@@ -1,0 +1,31 @@
+# The platform-core module: the lakehouse foundations a data platform team
+# decides for its estate. This product's opinionatedness, held as data.
+#
+# Two fields leave here: `version` and `module` are copied into every ADR set
+# authored against this module, which is how a set records what it was authored
+# from. `schema_version` stays — it describes the entries, and a set carries its
+# own. `type` and `summary` choose what is offered to whom and are recorded in
+# no set.
+#
+# `module` was `1` before the corpus was divided into modules. A set recording
+# `module: 1` was written from this module.
+#
+# There is no `substrate`. An entry records a decision about a team's
+# architecture, not about the tool that declares it, so nothing here is true of
+# one substrate and false of another. Which substrate an estate is written in is
+# the estate declaration's to say, and which dialect reads it is the analyzer's
+# to choose.
+#
+# Every entry was verified on 2026-09-20 against the Databricks documentation.
+# The provider version a *fingerprint* was read at is no longer recorded here,
+# because no fingerprint is: resource types and attribute paths live in
+# `scripts/wizard/evaluators.py`, and that is where their provenance lives too.
+
+schema_version: 1
+version: 0.2.0
+module: platform-core
+type: platform
+summary: >-
+  The lakehouse foundations: how workspaces and catalogs are isolated, which naming level carries
+  the environment, how the medallion layers map to schemas, and what the infrastructure-as-code
+  layer manages.

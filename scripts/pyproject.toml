@@ -1,0 +1,39 @@
+# The skill's Python environment, kept beside the scripts. uv builds it
+# from uv.lock beside this file; nothing is installed into the team's interpreter.
+# This directory is the project because it is what installs into a team's
+# repository and what the github workflow vendors, so both carry the lockfile.
+
+[project]
+name = "databricks-wizard"
+# Not the skill's version, which is SKILL.md's alone: uv requires the field, and
+# this project is never built or published (`package = false`).
+version = "0"
+# The interpreter itself is pinned by .python-version beside this file.
+requires-python = ">=3.13"
+dependencies = [
+    "pyyaml",
+    # The deployer checks that the group owning Unity Catalog exists before it plans
+    # (PRE-004), on the team's machine and in the pipeline's jobs alike. Pinned
+    # exactly, as the audit's reader is checked against it.
+    "databricks-sdk==0.146.0",
+]
+
+[dependency-groups]
+# The account reader's alone, asked for by snapshot.py's
+# invocation with `--group audit` and by nothing else. Pinned exactly: the
+# reader's calls and the fake SDKs the tests run it against are checked against
+# these versions. The Databricks SDK is a base dependency (above).
+audit = [
+    "boto3==1.43.111",
+]
+# Developer-only, and off by default: never part of a team's environment.
+dev = [
+    # S3 in server mode, for the remote-state tests: Terraform's S3 backend
+    # and the AWS provider are Go programs, which only a server on a port can reach.
+    "moto[server]==5.2.4",
+    "pytest",
+]
+
+[tool.uv]
+package = false
+default-groups = []

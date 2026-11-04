@@ -1,0 +1,44 @@
+id: DEC-104
+kind: decision
+title: Whether a full refresh is a job of its own
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    "Databricks recommends running full refreshes only when necessary. A full refresh always
+    reprocesses all records from the specified data sources through the logic that defines the
+    dataset." "Using a full refresh with streaming tables resets all state processing and
+    checkpoint information and can result in dropped records if input data is no longer available."
+  source: https://docs.databricks.com/aws/en/ldp/updates#when-to-use-a-full-refresh
+  checked: 2026-10-30
+
+question: >-
+  Is a full refresh of a pipeline run by a job of its own, or by running the scheduled job with a
+  full refresh when one is wanted?
+
+options:
+  - key: own-job
+    label: ITS OWN JOB — a separate job with no schedule runs the full refresh; scheduled jobs never do
+    cost: >-
+      a second job beside each pipeline's scheduled one, and the two compete for the pipeline when
+      both run at once
+    product_preferred: true
+    rule:
+      summary: |
+        no job with a schedule or trigger runs a pipeline task with a full refresh
+      failure_message: >-
+        {job} has a schedule or trigger and runs a full refresh; {adr} records the full refresh as
+        a job of its own, run deliberately.
+      evaluator: full_refresh_unscheduled
+      enforceability: strong
+      scope: root
+      clouds: [aws, azure, gcp]
+
+  - key: on-request
+    label: ON REQUEST — the scheduled job is run with a full refresh when someone asks for one
+    cost: >-
+      whether a run was a full refresh depends on someone remembering to ask at the right moment,
+      and nothing in the configuration records that it can happen
+    unconstrained: >-
+      A full refresh is a run of the scheduled job with a flag, chosen by whoever starts it.

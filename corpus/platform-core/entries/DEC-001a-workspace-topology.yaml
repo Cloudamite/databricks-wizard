@@ -1,0 +1,139 @@
+id: DEC-001a
+kind: decision
+title: Workspace topology
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    "Split SDLC environments into separate workspaces (at least Dev and Prod, but possibly more
+    depending on requirements)." And, under "Reasons to split workspaces", to isolate different
+    business units: "Ensure that no workspace assets in Databricks are shared between business units
+    when organizational boundaries require complete isolation."
+  source: https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/workspace-strategy#workspace-strategy-recommendations
+  checked: 2026-10-30
+
+# The vendor names the dimensions a workspace may be split along and conditions
+# each on requirements only the team can assess. It declines to decide; so do
+# we. Of the dimensions it names, two are about what a workspace *is for* —
+# the SDLC environment and the business unit — and those are the states on
+# offer. The rest (data protection, region, platform needs, resource limits)
+# add workspaces beside these rather than replacing them, which is why no state
+# below fires on a workspace it has no name for.
+#
+# **Measured by naming shape, as DEC-002's catalogs are.** Nothing in a plan says
+# what a workspace is for; its name is the only place a convention can say it.
+# So the convention is the product's, and stated on each label: a workspace per
+# environment is named for the environment, one per unit and environment is
+# named `<unit>_<environment>`. Business units are never asked for — a new unit
+# is ordinary growth, and under write-once a recorded list would mean a new ADR
+# set per unit — so the unit axis is measured by shape instead.
+#
+# **The environments are asked here when this answer needs them**, and DEC-002
+# is then shown them rather than asking again: a parameter's name is one fact
+# across the set. After `unit` or `single` nothing is asked here, and
+# DEC-002 asks as before. `unit` still reads them — to tell an environment's
+# name from a unit's — and DEC-002 always records them when this entry did not.
+#
+# Its rules are `scope: estate`: workspaces are declared in the account-scoped
+# part of the estate, so no workspace-scoped plan can answer them.
+#
+# Every rule is `weak`: workspaces created out of band — the console, a landing
+# zone, another team's configuration — appear in no plan.
+question: >-
+  What does one workspace correspond to — an SDLC environment, a business unit, both, or is there a
+  single workspace?
+
+options:
+  - key: environment
+    label: ENVIRONMENT — one workspace per environment, named for it
+    cost: >-
+      account-console objects backed by real cloud infrastructure, and a second of everything per
+      environment; a unit's work spans as many workspaces as there are environments
+    vendor_default: true
+    parameters:
+      - name: environments
+        question: >-
+          Name your environments, least to most production-like — the last one you name is
+          production. Under this option each is also the name of a workspace.
+    rule:
+      summary: |
+        every recorded environment has exactly one workspace named for it
+      failure_message: >-
+        {workspace} is declared more than once; {adr} records exactly one workspace per
+        environment, named for it.
+      absence_message: >-
+        This estate declares no workspace {workspace}; {adr} records exactly one workspace per
+        environment, named for it.
+      evaluator: workspace_axis_environment
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+
+  - key: unit
+    label: BUSINESS UNIT — one workspace per business unit, shared by every environment
+    cost: >-
+      production and development share each unit's compute, job list and admins; a workspace admin
+      reaches every environment's secret scopes
+    rule:
+      # Reads the environments without declaring them: DEC-002 asks for them
+      # when this answer did not, and they are what tells a workspace named for
+      # an environment from one named for a unit.
+      summary: |
+        no workspace is named for a recorded environment
+      failure_message: >-
+        {workspace} is named for an environment; {adr} records one workspace per business unit,
+        shared by every environment.
+      evaluator: workspace_axis_unit
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+
+  - key: both
+    label: BOTH — one workspace per business unit and environment, named <unit>_<environment>
+    cost: >-
+      as many workspaces as units multiplied by environments, and a naming convention every
+      workspace has to follow
+    parameters:
+      - name: environments
+        question: >-
+          Name your environments, least to most production-like — the last one you name is
+          production. Under this option every workspace is named for a business unit and one of
+          these, in that order, separated by an underscore.
+    rule:
+      summary: |
+        every workspace is named for a business unit and one recorded environment
+        ∧ no two workspaces share a name
+        ∧ every business unit the estate declares has a workspace in every recorded environment
+      failure_message: >-
+        {workspace} is not named for a business unit and one of the environments {adr} records,
+        or is declared more than once.
+      absence_message: >-
+        This estate declares no workspace {workspace}; {adr} records one for every business unit
+        this estate declares in every recorded environment.
+      evaluator: workspace_axis_both
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+
+  - key: single
+    label: SINGLE — one workspace, shared by every environment and business unit
+    cost: >-
+      shared compute, one job list, and one pool of people who see everything; a workspace admin
+      reaches every secret scope
+    rule:
+      # One clause, because one clause is what this rule reads. Where the
+      # environments are carried instead, by catalog or by schema, is DEC-002's
+      # target state and is measured there.
+      summary: |
+        the estate declares exactly one workspace
+      failure_message: >-
+        {count} workspaces are declared, but {adr} records one, shared by every environment and
+        business unit.
+      evaluator: workspace_axis_single
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]

@@ -1,0 +1,78 @@
+id: PRE-001
+kind: prescription
+title: Object versioning on the cloud object storage behind a storage root
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    "Databricks recommends that you don't turn on bucket versioning for buckets that store Delta Lake
+    data, including Unity Catalog managed tables." Where versioning must stay on, the vendor
+    supplies its own fallback: "If you choose to use bucket versioning, Databricks recommends
+    retaining three versions and implementing a lifecycle management policy that retains versions
+    for 7 days or less"
+  source: https://docs.databricks.com/aws/en/delta/s3-limitations#bucket-versioning-and-delta-lake
+  checked: 2026-10-30
+
+decision: >-
+  Object versioning on the storage backing the Unity Catalog storage root is disabled, or bounded to
+  at most three versions under a lifecycle policy of seven days or less.
+
+why: >-
+  Delta Lake keeps its own version history in the transaction log, so the storage layer's versioning
+  is a second, uncoordinated copy of the same idea. VACUUM and log cleanup delete files that the
+  storage layer then retains as noncurrent versions, and those versions are neither readable as Delta
+  history nor reclaimed by it — storage grows without bound and the cost is invisible in the table's
+  own metrics. The vendor grades its own recommendation, so the team selects the state they hold
+  rather than being asked whether the constraint applies.
+
+alternatives:
+  - key: disabled
+    label: Versioning disabled
+    cost: a deleted object cannot be recovered from the storage layer
+    vendor_default: true
+    rule:
+      summary: |
+        object versioning is not enabled on the storage backing the Unity Catalog storage root
+      failure_message: >-
+        Versioning is enabled on {bucket}, behind the storage root of {objects}. {adr} records it
+        disabled.
+      evaluator: storage_root_versioning_disabled
+      enforceability: weak
+      scope: root
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        the storage backing the storage root is not declared in this estate, or declares no
+        versioning setting — its normal condition rather than an edge case
+
+  - key: bounded
+    label: Versioning on, at most 3 versions, lifecycle 7 days or less
+    cost: >-
+      the lifecycle policy must be readable by the analyzer, and often is not; the bound is enforced
+      by the policy rather than by the storage layer
+    rule:
+      summary: |
+        object versioning is enabled on the storage backing the storage root
+        ∧ noncurrent versions are bounded to at most 3
+        ∧ they are retained for 7 days or less
+      # Disjunctive, and it names the third way this state is missed: versioning
+      # switched off is the *other* alternative of this prescription, which is a
+      # different ADR than the one the team holds. The report is where a set and
+      # an estate that have drifted apart are brought back together, so it is
+      # said rather than passed over.
+      failure_message: >-
+        {bucket}, behind the storage root of {objects}, does not hold versioning bounded as {adr}
+        records it: versioning is off, or enabled with no bounding lifecycle policy, or bounded
+        beyond 3 versions or 7 days.
+      evaluator: storage_root_versioning_bounded
+      enforceability: weak
+      scope: root
+      clouds: [aws, azure, gcp]
+      # A missing lifecycle policy is a deviation, not a non-result: versioning is
+      # on and nothing bounds it, which is the condition this alternative exists
+      # to prevent. What is genuinely unreadable is the bound itself on Azure,
+      # which expresses no limit on the *number* of noncurrent versions.
+      unevaluable_when: >-
+        the storage backing the storage root is not declared in this estate, declares no
+        versioning setting, or sits on a cloud that expresses no bound on the number of
+        noncurrent versions

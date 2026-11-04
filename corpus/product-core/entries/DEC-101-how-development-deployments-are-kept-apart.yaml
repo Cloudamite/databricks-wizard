@@ -1,0 +1,91 @@
+id: DEC-101
+kind: decision
+title: How development deployments are kept apart
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    Development mode "prepends all resources that are not deployed as files or notebooks with the
+    prefix" of the deploying user, and "pauses all schedules and triggers on deployed resources such
+    as jobs or quality monitors." It is enabled per target: "add the `mode` mapping, set to
+    `development`, to the intended target."
+  source: https://docs.databricks.com/aws/en/dev-tools/bundles/deployment-modes#development-mode
+  checked: 2026-10-30
+
+# The vendor describes development mode and recommends none of these, so this
+# is a decision. A catalog per developer is offered only where the platform's
+# catalogs carry the environment: where the environment is a schema inside a
+# domain catalog, a developer's catalog has no environment to belong to.
+#
+# `single` and `shared` both leave one deployment in development and differ in
+# who makes it. Under `single` only the pipeline does, so development is an
+# integration environment, and DEC-102's branching rules can cover it too.
+# Under `shared` anyone deploys over anyone, from any branch.
+question: >-
+  When two developers, or two pull requests, deploy to development at the same time, how are their
+  deployments kept apart?
+
+options:
+  - key: development-mode
+    label: DEVELOPMENT MODE — each deployment's names carry the developer, in the shared catalogs
+    cost: >-
+      schema names change per developer, so code must take them from the bundle rather than hard-code
+      them; the state must be kept per branch too, or a second branch renames the first's schemas
+    product_preferred: true
+    rule:
+      summary: |
+        the development target sets mode: development
+      failure_message: >-
+        The development target does not set mode: development; {adr} records development
+        deployments kept apart by development mode.
+      evaluator: development_target_in_development_mode
+      enforceability: strong
+      scope: root
+      substrates: [bundle]
+      clouds: [aws, azure, gcp]
+
+  - key: developer-catalog
+    label: A CATALOG PER DEVELOPER — each developer deploys into a catalog named for them
+    cost: >-
+      every developer needs CREATE CATALOG on the metastore, often a platform-team privilege, and
+      each catalog must exist before its owner can deploy
+    available_when:
+      platform-core/DEC-002: [environment, both]
+    rule:
+      summary: |
+        the development target's catalog is named for the deploying user
+      failure_message: >-
+        The development target's catalog is not named for the deploying user; {adr} records a
+        catalog per developer.
+      evaluator: development_catalog_per_developer
+      enforceability: weak
+      scope: root
+      clouds: [aws, azure, gcp]
+
+  - key: single
+    label: ONE DEPLOYMENT — only the pipeline deploys to development; developers do not
+    cost: >-
+      a change can be tried in development only once it is merged, so developers try it elsewhere
+      first, and development holds one change at a time
+    rule:
+      summary: |
+        the development target is not in development mode
+        ∧ its deployment's root path names no user and no branch
+      failure_message: >-
+        The development target is deployed per user or per branch; {adr} records a single
+        deployment in development, made by the pipeline.
+      evaluator: development_single_deployment
+      enforceability: strong
+      scope: root
+      substrates: [bundle]
+      clouds: [aws, azure, gcp]
+
+  - key: shared
+    label: SHARED — every developer deploys to the same resources in development
+    cost: >-
+      two branches in flight work against each other's tables, and a deployment from a pull request
+      is unsafe
+    unconstrained: >-
+      Development deployments are not kept apart: every deployment to development replaces the same
+      schemas, jobs and pipelines.

@@ -1,0 +1,98 @@
+id: DEC-008
+kind: decision
+title: Which catalogs may share cloud object storage
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    "You can specify the same managed storage location for multiple schemas and catalogs." Sharing
+    is permitted, and nothing on the page argues for or against it.
+  source: https://docs.databricks.com/aws/en/connect/unity-catalog/cloud-storage/managed-storage#managed-storage-location-storage-root-and-storage-location
+  checked: 2026-10-30
+
+# The vendor's isolation guidance is on another page and names a level, not a
+# layout: "Give preference to catalog-level storage as your primary unit of
+# data isolation."
+# (https://docs.databricks.com/aws/en/data-governance/unity-catalog/best-practices#managed-storage,
+# checked 2026-10-13). Whether catalogs then keep that storage in cloud object
+# storage of their own is left open, so no option here is the vendor's default.
+#
+# **Cloud object storage, not the path.** The unit is what a cloud applies
+# encryption key, versioning, object lock and access policy to: an S3 or GCS
+# bucket, an Azure storage account. Two catalogs at different prefixes of one
+# have different storage roots and the same key, versioning, object lock and
+# policy. It is read from the storage URL.
+#
+# **Independent of DEC-009.** This entry decides where catalogs' storage lies;
+# DEC-009 decides which cloud identity reaches it. Neither answer constrains
+# the other: catalogs in one cloud object storage may each use an identity of
+# their own, and catalogs in cloud object storage of their own may share one.
+#
+# **A catalog's effective root is measured**: its own, else the metastore's.
+# Catalogs inheriting one metastore root share its storage, so the rules read
+# the layout the files actually take, whatever PRE-003's answer was.
+question: Which catalogs may keep their managed storage in the same cloud object storage?
+
+options:
+  - key: one-to-one
+    label: ONE-TO-ONE — every catalog in cloud object storage of its own
+    cost: >-
+      cloud object storage to provision per catalog, each with its own policy, key, versioning and
+      lifecycle to keep in step
+    rule:
+      summary: |
+        no two catalogs' storage roots, their own or inherited from the metastore, are in the same
+        cloud object storage
+      failure_message: >-
+        {resource} keeps its managed storage in {bucket}, which {catalogs} also use. {adr} records
+        cloud object storage per catalog.
+      evaluator: catalog_buckets_unshared
+      enforceability: strong
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        a catalog declares no storage root and the estate does not declare the metastore it would
+        inherit one from, or a storage root is computed from a value unknown until apply
+
+  # Under `environment` a catalog *is* an environment, so this would enforce
+  # exactly what one-to-one does; under `domain` a catalog spans every
+  # environment, so there is nothing to group by. `both` names a domain and an
+  # environment per catalog, and is the one axis where sharing within an
+  # environment is a layout of its own. The environment is read from the
+  # catalog's name, as DEC-002 records it, not asked for again.
+  - key: by-environment
+    label: BY ENVIRONMENT — catalogs share cloud object storage only with catalogs of the same environment
+    cost: >-
+      domains inside one environment are separated by grants alone, and share one key, versioning
+      setting and lifecycle
+    available_when:
+      DEC-002: [both]
+    rule:
+      summary: |
+        the catalogs whose storage roots, their own or inherited from the metastore, are in the
+        same cloud object storage all belong to one environment
+      failure_message: >-
+        {bucket} holds the managed storage of catalogs in more than one environment: {catalogs}.
+        {adr} records sharing within an environment only.
+      evaluator: shared_buckets_one_environment
+      uses: [environments]
+      enforceability: strong
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        a catalog's name carries no recorded environment, a catalog declares no storage root and
+        the estate does not declare the metastore it would inherit one from, or a storage root is
+        computed from a value unknown until apply
+
+  # Not enforced, and recorded as such. Storage per catalog conforms to this
+  # answer as well as any sharing does: the team chose not to constrain the
+  # layout, not to share.
+  - key: unconstrained
+    label: UNCONSTRAINED — any catalogs may share cloud object storage; nothing is enforced
+    cost: >-
+      nothing stops production and development catalogs sharing cloud object storage, and with it
+      one policy, key, versioning setting and lifecycle
+    unconstrained: >-
+      the team leaves the layout of catalogs over cloud object storage open; storage per catalog
+      and any sharing conform alike

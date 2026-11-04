@@ -1,0 +1,77 @@
+id: DEC-003
+kind: decision
+title: Schema per medallion layer
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    "A medallion architecture is a data design pattern used to organize data logically", and
+    "Following the medallion architecture is a recommended best practice but not a requirement".
+    The documentation's own example, under "Example medallion architecture", puts each layer "in a
+    different schema of the ops catalog" without stating that layout as required.
+  source: https://docs.databricks.com/aws/en/lakehouse/medallion#medallion-architecture-as-a-data-design-pattern
+  checked: 2026-10-30
+
+# A recommended pattern that is explicitly not a requirement is an option, not a
+# prescription — the team is choosing a layout, and both layouts are recordable.
+question: >-
+  Do the medallion layers get one schema each, with identical names in every environment?
+
+options:
+  - key: layer-per-schema
+    label: LAYER PER SCHEMA — the layers are schemas, named identically everywhere
+    cost: >-
+      a table name alone no longer says which environment it is in, so environment has to travel
+      with the catalog reference rather than in the name
+    vendor_default: true
+    # Not offered where the catalog axis is the domain alone: there the schemas
+    # already carry the environment, and one schema cannot be named for a layer
+    # and an environment at once. The layer lives in the table name instead,
+    # which is this entry's other option.
+    available_when:
+      DEC-002: [environment, both]
+    parameters:
+      - name: layers
+        question: >-
+          Name your layers, from rawest to most refined. These are the schemas every catalog
+          must hold, and no catalog may hold any other.
+    rule:
+      summary: |
+        every catalog holds one schema per recorded layer
+        ∧ no schema outside that list
+      failure_message: >-
+        {catalog} holds a schema {schema}, which is not one of the layers {adr} records.
+      absence_message: >-
+        {catalog} holds no schema {schema}, a layer {adr} records.
+      evaluator: schema_layer_per_schema
+      uses: [layers]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+
+  - key: layer-in-table-name
+    label: LAYER IN THE TABLE NAME — one schema per domain, the layer carried as a name prefix
+    cost: >-
+      the layer stops being a grant boundary, so read access to silver cannot be given without
+      giving it to bronze in the same schema
+    parameters:
+      - name: layers
+        question: >-
+          Name your layers, from rawest to most refined. Under this option they are the prefixes
+          your table names carry, and no schema may be named for one.
+    rule:
+      summary: |
+        no schema is named for a recorded layer
+        ∧ every declared table name begins with one
+      failure_message: >-
+        {schema} is named for a layer {adr} records as a table-name prefix, or a table in it
+        carries no recorded prefix.
+      evaluator: schema_layer_in_table_name
+      uses: [layers]
+      enforceability: weak
+      scope: root
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        the estate declares no schemas, or table names are generated in code rather than declared
+        in the configuration, which is the normal case for tables written by a pipeline

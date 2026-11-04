@@ -1,0 +1,130 @@
+id: DEC-102
+kind: decision
+title: How branches map to environments
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    "Databricks recommends a trunk-based branching strategy to minimize merge conflicts"
+  source: https://docs.databricks.com/aws/en/dev-tools/ci-cd/flows#source-control
+  checked: 2026-10-30
+
+# The vendor recommends trunk for bundles. It is still a decision rather than a
+# prescription: a branch per environment is a model teams hold for their own
+# reasons, and the same page offers it to SQL developers ("Use branches (for
+# example, development, staging, production) to manage environment-specific
+# changes"). Both trunk variants are the vendor's default; a team sees one.
+#
+# **Each model is offered twice, and the team sees one of each.** Whether the
+# first environment is covered depends on DEC-101: where developers and pull
+# requests deploy to development from their own branches, no branching rule can
+# hold there, so the rules cover the environments above the first. Where only
+# the pipeline deploys to development, they cover every environment. A rule
+# cannot read another ADR's answer, so the choice is made by which variant
+# DEC-101's answer leaves on offer.
+#
+# **Measured in the live workspace.** A bundle deployment's `metadata.json`
+# records the branch and the commit it was deployed from
+# (`config.bundle.git.actual_branch` and `.commit`, read in the Databricks CLI
+# v1.14.1). The environments, and their order, are the platform's.
+question: >-
+  Which branches are environments deployed from: one default branch, or a branch for each
+  environment?
+
+options:
+  - key: trunk
+    label: TRUNK — every environment above the first deploys from the default branch
+    cost: >-
+      environments differ only in which commit of one history they run, so promotion has to say
+      which commit, and the default branch must always be deployable
+    vendor_default: true
+    available_when:
+      DEC-101: [development-mode, developer-catalog, shared]
+    rule:
+      summary: |
+        every environment above the first runs a commit reachable from the default branch
+      failure_message: >-
+        {environment} runs a commit the default branch does not hold; {adr} records every
+        environment above the first deployed from the default branch.
+      evaluator: branches_trunk
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        an environment's bundle deployment metadata records no git commit, or the commit history
+        needed to test reachability is not available
+
+  - key: trunk-including-development
+    label: TRUNK — every environment, development included, deploys from the default branch
+    cost: >-
+      environments differ only in which commit of one history they run, so promotion has to say
+      which commit, and the default branch must always be deployable
+    vendor_default: true
+    available_when:
+      DEC-101: [single]
+    rule:
+      summary: |
+        every environment runs a commit reachable from the default branch
+      failure_message: >-
+        {environment} runs a commit the default branch does not hold; {adr} records every
+        environment deployed from the default branch.
+      evaluator: branches_trunk_including_development
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        an environment's bundle deployment metadata records no git commit, or the commit history
+        needed to test reachability is not available
+
+  - key: per-environment
+    label: A BRANCH PER ENVIRONMENT — each environment above the first deploys from a branch named for it
+    cost: >-
+      a change reaches production by moving through every branch, and a merge commit made on the
+      way is a commit no environment below has run
+    available_when:
+      DEC-101: [development-mode, developer-catalog, shared]
+    rule:
+      summary: |
+        every environment above the first was deployed from the branch named for it
+      failure_message: >-
+        {environment} was deployed from a branch not named for it; {adr} records a branch per
+        environment.
+      evaluator: branches_per_environment
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        an environment's bundle deployment metadata records no git branch
+
+  - key: per-environment-including-development
+    label: A BRANCH PER ENVIRONMENT — each environment, development included, deploys from a branch named for it
+    cost: >-
+      a change reaches production by moving through every branch, and a merge commit made on the
+      way is a commit no environment below has run
+    available_when:
+      DEC-101: [single]
+    rule:
+      summary: |
+        every environment was deployed from the branch named for it
+      failure_message: >-
+        {environment} was deployed from a branch not named for it; {adr} records a branch per
+        environment, development included.
+      evaluator: branches_per_environment_including_development
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        an environment's bundle deployment metadata records no git branch
+
+  - key: open
+    label: LEFT OPEN — the team fixes no branching model
+    cost: >-
+      nothing says which branch an environment may be deployed from, so a deployment from a
+      feature branch to production is not a deviation
+    unconstrained: >-
+      Environments may be deployed from any branch; the team records no branching model.

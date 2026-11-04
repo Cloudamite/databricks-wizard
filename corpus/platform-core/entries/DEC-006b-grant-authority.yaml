@@ -1,0 +1,65 @@
+id: DEC-006b
+kind: decision
+title: Grant authority
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    databricks_grants is "authoritative for grants on securables. Configuring this resource for a
+    securable will OVERWRITE any existing grants and changes made outside of Terraform will be
+    reset." The provider offers databricks_grant, singular, "for more granular grant management".
+  source: https://registry.terraform.io/providers/databricks/databricks/1.132.0/docs/resources/grants
+  checked: 2026-09-20
+
+# Two resources, both supported, with opposite postures toward grants made
+# elsewhere. The provider presents them as alternatives rather than ranking
+# them, so the team chooses which posture their estate holds.
+question: >-
+  Does the IaC layer own the whole grant list on a securable, or only the grants it declares?
+
+options:
+  - key: authoritative
+    label: AUTHORITATIVE — the grant list is owned wholesale, and a grant made elsewhere is reset
+    cost: >-
+      an emergency grant made in the UI survives only until the next apply, and nothing warns the
+      person who made it
+    vendor_default: true
+    rule:
+      summary: |
+        grants are declared authoritatively for the securable
+        ∧ no granular grant targets a securable an authoritative declaration already covers
+      # Disjunctive, because the summary above states two clauses and a securable
+      # can fail either. Declared only granularly, the grant list is not owned
+      # wholesale and a grant made in the UI survives every apply; declared both
+      # ways, the authoritative block overwrites the list on every apply while
+      # the granular one keeps re-adding its principal. The message said only the
+      # second, so the first would have been reported in a sentence that was not
+      # true of it.
+      failure_message: >-
+        {securable} is not declared authoritatively, or mixes authoritative and granular
+        declarations; {adr} records the IaC layer as authoritative, and the two together
+        leave neither in charge.
+      evaluator: grant_authority_authoritative
+      enforceability: strong
+      scope: root
+      substrates: [terraform]
+      clouds: [aws, azure, gcp]
+
+  - key: granular
+    label: GRANULAR — only the declared grants are owned, and grants made elsewhere are left alone
+    cost: >-
+      the grant list drifts by design, so the estate's real access is never fully described by the
+      configuration and no check can assert what is absent
+    rule:
+      summary: |
+        grants are declared granularly, one per principal and privilege
+        ∧ no authoritative grant declaration covers the securable
+      failure_message: >-
+        {securable} is managed by an authoritative grant declaration; {adr} records granular
+        management, which this would overwrite.
+      evaluator: grant_authority_granular
+      enforceability: strong
+      scope: root
+      substrates: [terraform]
+      clouds: [aws, azure, gcp]

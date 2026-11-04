@@ -1,0 +1,32 @@
+id: ADV-001
+kind: advice
+title: No per-team workspaces
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    "Do not create separate workspaces for individual teams or small projects (use Unity Catalog
+    catalogs and schemas for isolation instead)."
+  source: https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/workspace-strategy#workspace-strategy-recommendations
+  checked: 2026-10-30
+
+statement: >-
+  Do not create separate workspaces for individual teams or small projects. Use Unity Catalog
+  catalogs and schemas for isolation instead.
+
+no_rule_because: >-
+  nothing in configuration says a workspace is "for a small project". The guidance is unconditional
+  and the vendor states it plainly, but a check needs a fingerprint distinguishing a team workspace
+  from the workspaces DEC-001a records, and no attribute carries that. DEC-001a's naming convention
+  is the candidate: a workspace named for no recorded environment and no business unit. It is not
+  adopted here because it would fire on an estate with a legitimate extra workspace — a sandbox, a
+  region, an acquisition — and a check that fires on deliberate structure teaches a team to switch
+  it off. A business unit is not a team: DEC-001a's unit state is the vendor's own isolation
+  boundary, and this advice is about splitting below it.
+
+fingerprint_reviewed: 2026-09-29
+
+# Shown beside the topology decision, which is where the sprawl this warns about
+# would be chosen. Advice with nowhere to appear is advice nobody reads.
+relates_to: DEC-001a

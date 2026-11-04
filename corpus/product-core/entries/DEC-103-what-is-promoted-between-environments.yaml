@@ -1,0 +1,63 @@
+id: DEC-103
+kind: decision
+title: What is promoted between environments
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    "always use versioned artifacts, such as Git commit hashes, when uploading to Databricks or
+    external storage."
+  source: https://docs.databricks.com/aws/en/dev-tools/ci-cd/flows#source-control
+  checked: 2026-10-30
+
+# The environments are the platform's: they are given by the platform-core set
+# and never asked here. The order the platform recorded them in is what makes
+# one environment "below" another.
+#
+# **Measured in the live workspace, not in configuration.** Whether a version
+# was tested below is a fact about deployments, and a bundle or a plan says only
+# what will be deployed. A bundle deployment writes `metadata.json` under the
+# target's `workspace.state_path`, and its `config.bundle.git.commit` is the
+# commit it was deployed from (read in the Databricks CLI v1.14.1). So the rule
+# compares environments as they stand: an environment running a commit the one
+# below it does not hold is running something that was never tested there. It
+# cannot see that the environment below actually ran the commit before moving
+# on, which is why it is weak.
+question: >-
+  When a change moves to the next environment, what is deployed there: the version the environment
+  below already verified, or whatever the branch holds when the deployment runs?
+
+options:
+  - key: tested-version
+    label: THE TESTED VERSION — each environment deploys a version the environment below it verified
+    cost: >-
+      every deployment above the first names a version, so promotion needs a release candidate or a
+      tag to name, and something to cut it; with a branch per environment, each branch must be
+      fast-forwarded to the one below, because a merge commit is a commit nothing has tested
+    product_preferred: true
+    rule:
+      summary: |
+        the commit deployed to each environment is the commit deployed to the environment below it,
+        or an ancestor of that commit
+      failure_message: >-
+        {environment} runs a commit the environment below it does not hold; {adr} records
+        promotion of the tested version.
+      evaluator: promotion_of_the_tested_version
+      uses: [environments]
+      enforceability: weak
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        an environment's bundle deployment metadata records no git commit, as a deployment made
+        from outside a git checkout does, or the commit history needed to compare two commits is not
+        available
+
+  - key: branch-head
+    label: THE BRANCH HEAD — each environment deploys whatever its branch holds at deployment time
+    cost: >-
+      two promotions resolve the branch at two moments, so production can run a commit the
+      environment below never saw, and there is no earlier version to roll back to
+    unconstrained: >-
+      What reaches an environment is whatever its branch holds when the deployment runs; nothing
+      ties it to what the environment below verified.

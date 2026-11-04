@@ -1,0 +1,21 @@
+# The product-core module: how a data product team deploys and promotes its
+# bundle, on the estate its platform team's platform-core set describes.
+#
+# It builds on platform-core. A walk for it starts from the platform set in the
+# ADR monorepo's `platform/` folder: the platform's answers remove options here,
+# and the names the platform recorded, such as the environments, are not asked
+# again. Its entries are drawn from the reference corpus's own records.
+#
+# Its rules name evaluators nothing implements yet: no dialect reads a bundle in
+# this version, so a product set records a target state nothing measures until
+# one does.
+
+schema_version: 1
+version: 0.1.0
+module: product-core
+type: product
+summary: >-
+  How a product team deploys and promotes its bundle: the identity its jobs run as, how
+  development deployments are kept apart, which branches environments deploy from, what is
+  promoted between environments, and how a full refresh is run.
+builds_on: platform-core

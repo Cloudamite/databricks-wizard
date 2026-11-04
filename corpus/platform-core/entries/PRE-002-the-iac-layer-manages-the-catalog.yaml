@@ -1,0 +1,40 @@
+id: PRE-002
+kind: prescription
+title: The IaC layer manages the catalog
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    "Use an IaC tool to launch workspaces and infrastructure wherever possible." "Do not manually
+    create workspaces in production (use IaC for repeatability)." "Do not mix IaC and manual
+    configuration (choose one approach)."
+  source: https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/iac#infrastructure-as-code-recommendations
+  checked: 2026-10-30
+
+decision: >-
+  Every catalog the target state names is declared in the configuration and managed by the IaC
+  layer, rather than created through the UI, the account console or SQL and adopted afterwards.
+
+why: >-
+  A catalog created out of band is invisible to the IaC layer, which can therefore neither report
+  nor correct what has happened to it — and the analyzer that measures this estate reads the
+  configuration, not the metastore. An unmanaged catalog is therefore not merely undeclared: it is
+  unmeasurable, and every rule in this ADR set is silently inapplicable to it. Databricks reaches the
+  same place from the operational side, asking teams not to mix the two approaches at all.
+
+rule:
+  summary: |
+    every catalog named in the target state is declared in the configuration
+    ∧ none is introduced by a reference or an import comment alone
+  failure_message: >-
+    {catalog} is referenced but never declared in the configuration — it was created out of
+    band. See {adr}.
+  evaluator: catalog_managed_by_iac
+  enforceability: strong
+  scope: estate
+  substrates: [terraform]
+  clouds: [aws, azure, gcp]
+  unevaluable_when: >-
+    the estate declares no catalogs at all, in which case nothing distinguishes
+    "manages no catalogs" from "manages them elsewhere"

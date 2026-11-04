@@ -1,0 +1,37 @@
+id: PRE-101
+kind: prescription
+title: Every target runs as a service principal
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    "It is best practice to configure run identities for staging and production target
+    deployments." "setting a `run_as` identity to a service principal for production targets is the
+    most secure way of running a production workflow as it:" … "Decouples the permission to run the
+    production workflow from the identity that created or deployed the bundle."
+  source: https://docs.databricks.com/aws/en/dev-tools/bundles/run-as#set-target-deployment-identities
+  checked: 2026-10-30
+
+decision: >-
+  Every job and pipeline, in every target, runs as a service principal named in its `run_as`, never
+  as the person or process that deployed it.
+
+why: >-
+  A job runs as whoever deployed it unless `run_as` says otherwise, so without it the identity of a
+  production pipeline is whoever last deployed it. That works until the person leaves and their
+  account is disabled, and the nightly run then fails with a permission error naming someone nobody
+  connects with the pipeline. Pinning every target, not only production, keeps the environments
+  differing in data rather than in mechanics: a job that works in development already runs as the
+  same kind of identity it will run as in production.
+
+rule:
+  summary: |
+    every job and pipeline in every target sets run_as to a service principal
+  failure_message: >-
+    {resource} does not run as a service principal; {adr} records every job and pipeline in every
+    target running as one.
+  evaluator: run_as_service_principal
+  enforceability: strong
+  scope: root
+  clouds: [aws, azure, gcp]

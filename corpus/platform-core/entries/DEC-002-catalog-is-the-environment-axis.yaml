@@ -1,0 +1,119 @@
+id: DEC-002
+kind: decision
+title: What a catalog corresponds to
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    "Organize data and AI objects into catalogs and schemas that reflect organizational divisions and
+    projects. Often, this means that catalogs correspond to an environment scope, team, business
+    unit, or some combination of these." The metastore is not an axis at all. Under "Metastores":
+    "You can have only one metastore per region"; and under "Cross-region and cross-platform
+    sharing": "Use your single-region metastore for all software development lifecycle scopes and
+    business units, for example, dev, test, prod, sales, and marketing."
+  source: https://docs.databricks.com/aws/en/data-governance/unity-catalog/best-practices#catalogs-and-schemas
+  checked: 2026-10-30
+
+# "Often … or some combination of these" is the vendor declining to pick, and it
+# is also the vendor licensing the third option below: a catalog carrying both
+# axes at once is the combination the sentence names.
+#
+# **Every option records the environments, and the order is the answer.** The
+# list is given least to most production-like, so the last name is production —
+# which is what DEC-006a reads rather than asking a second time, and what
+# DEC-001b reads to tell a lower environment from the one it writes into. One
+# question, three rules.
+#
+# **Each label states its own naming convention**, not only the parameter
+# question: after a workspace answer that named the environments, this card
+# shows them given and puts no question, so a convention stated only there
+# would never reach the team.
+#
+# **Domains are never asked for.** A new domain is ordinary growth, and a target
+# state that had to be re-authored for one would be re-authored constantly —
+# under write-once, that means a new ADR set. So the domain axis is measured by
+# shape rather than by list: whatever domains the estate declares, each must
+# appear in every recorded environment.
+question: What does one catalog correspond to — an SDLC environment, a data domain, or both?
+
+options:
+  - key: environment
+    label: ENVIRONMENT — one catalog per environment, named for it; domains separated by schema
+    cost: >-
+      a domain's tables are spread across as many catalogs as there are environments, so a
+      domain-wide grant is repeated per environment
+    vendor_default: true
+    parameters:
+      - name: environments
+        question: >-
+          Name your environments, least to most production-like — the last one you name is
+          production. Under this option they are also the names of your catalogs.
+    rule:
+      summary: |
+        the estate declares one catalog per recorded environment
+        ∧ no catalog outside that list
+      failure_message: >-
+        {catalog} is not one of the catalogs {adr} records.
+      absence_message: >-
+        This estate declares no catalog {catalog}, an environment {adr} records.
+      evaluator: catalog_axis_environment
+      uses: [environments]
+      enforceability: strong
+      scope: estate
+      clouds: [aws, azure, gcp]
+
+  - key: domain
+    label: DOMAIN — one catalog per data domain; environments are schemas named for them
+    cost: >-
+      an environment is no longer a grant boundary, so production and development data sit under one
+      securable and one owner
+    parameters:
+      - name: environments
+        question: >-
+          Name your environments, least to most production-like — the last one you name is
+          production. Under this option they are the schemas inside each catalog.
+    rule:
+      summary: |
+        every catalog holds one schema per recorded environment
+        ∧ no schema outside that list
+      failure_message: >-
+        {catalog} holds a schema {schema}, which is not one of the environments {adr} records.
+      absence_message: >-
+        {catalog} holds no schema {schema}, an environment {adr} records.
+      evaluator: catalog_axis_domain
+      uses: [environments]
+      enforceability: strong
+      scope: estate
+      clouds: [aws, azure, gcp]
+
+  - key: both
+    label: BOTH — one catalog per domain and environment, named <domain>_<environment>
+    cost: >-
+      as many catalogs as domains multiplied by environments, and a naming convention every team
+      has to follow
+    # The product's own preference, where the vendor declines to choose. It is
+    # the only option under which a grant boundary exists on both axes at once:
+    # production data of one domain is a securable of its own, so neither a
+    # domain-wide nor an environment-wide grant reaches across the other axis.
+    product_preferred: true
+    parameters:
+      - name: environments
+        question: >-
+          Name your environments, least to most production-like — the last one you name is
+          production. Under this option every catalog is named for a domain and one of these,
+          in that order, separated by an underscore.
+    rule:
+      summary: |
+        every catalog is named for a domain and one recorded environment
+        ∧ every domain the estate declares has a catalog in every recorded environment
+      failure_message: >-
+        {catalog} is not named for a domain and one of the environments {adr} records.
+      absence_message: >-
+        This estate declares no catalog {catalog}; {adr} records a catalog for every domain this
+        estate declares in every recorded environment.
+      evaluator: catalog_axis_both
+      uses: [environments]
+      enforceability: strong
+      scope: estate
+      clouds: [aws, azure, gcp]

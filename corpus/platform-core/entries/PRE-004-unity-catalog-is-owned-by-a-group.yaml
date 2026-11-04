@@ -1,0 +1,60 @@
+id: PRE-004
+kind: prescription
+title: Unity Catalog is owned by a group
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    Under "Catalogs and schemas": "Always assign ownership of production catalogs and schemas to
+    groups, not individual users." Under "Admin roles and powerful privileges": "Assign object
+    ownership to groups, especially if objects are used in production. The creator of any object is
+    its first owner. Creators should reassign ownership to appropriate groups." Under "Identities":
+    "Use groups to assign ownership to most securable objects."
+  source: https://docs.databricks.com/aws/en/data-governance/unity-catalog/best-practices
+  checked: 2026-11-03
+
+# The group is the team's, and nothing here creates it or changes who is in it. The
+# vendor, under "Identities": "Avoid modifying groups in Databricks: use your identity
+# provider". The deployer checks the group exists before it plans; the setup checks that
+# the pipeline's principal is a member before it writes the deploy workflow.
+#
+# Two ways a pipeline's principal comes to be in the group, neither probed yet:
+# - an identity provider's service principal (an Entra application, say), added to the
+#   identity provider's group there, and named to the trust as an existing principal.
+#   Under automatic identity management it appears in Databricks only on first use;
+# - a group managed in Databricks that holds the identity provider's group and the
+#   pipeline's principal. Whether a synced group can be nested in one is not documented.
+decision: >-
+  A group the team names owns the metastore and every storage credential, external location,
+  catalog and schema the estate declares. No person owns one, and neither does the identity that
+  happened to create it.
+
+why: >-
+  The creator of a Unity Catalog object is its first owner, and the owner is who may change it and
+  grant on it. An estate first applied from a team member's machine is therefore owned by that
+  person: nobody else, a deploying pipeline included, can manage it, and it stays that way when
+  they leave. Owned by a group, the team decides who manages Unity Catalog by who is in the group,
+  and the pipeline's principal is one more member.
+
+parameters:
+  - name: owner_group
+    question: >-
+      Which group owns Unity Catalog? Name an account-level group that already exists, as it is
+      named in Databricks. The team adds the pipeline's principal to it; this product never changes
+      who is in it.
+
+rule:
+  summary: |
+    the metastore, and every storage credential, external location, catalog and schema,
+    is owned by the recorded group
+  failure_message: >-
+    {resource} is not owned by the group {adr} records: it states another owner, or none, and then
+    whoever creates it owns it. Set its owner to that group.
+  evaluator: unity_catalog_owned_by_group
+  enforceability: strong
+  scope: root
+  clouds: [aws, azure, gcp]
+  uses: [owner_group]
+  unevaluable_when: >-
+    the root declares no metastore, storage credential, external location, catalog or schema

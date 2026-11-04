@@ -1,0 +1,27 @@
+name: Released
+
+# Runs when a maintainer publishes a draft release (never for a pre-release):
+# moves the branch `release`, which the plugin marketplace reads, to the
+# published tag. The move is a fast-forward only, so an older release published
+# after a newer one fails here and users keep the newer one.
+
+on:
+  release:
+    types: [released]
+
+permissions:
+  contents: write
+
+jobs:
+  advance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Offer the published release to users
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python3 .github/release.py advance

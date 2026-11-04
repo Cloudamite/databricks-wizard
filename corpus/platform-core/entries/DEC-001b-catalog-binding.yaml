@@ -1,0 +1,92 @@
+id: DEC-001b
+kind: decision
+title: Catalog binding
+provenance: shipped
+
+vendor:
+  strength: option
+  quote: >-
+    "All catalogs are accessible by default from any workspace attached to the same metastore";
+    binding "lets you override this default to restrict a catalog to one or more specific
+    workspaces". ISOLATED is framed as a response to requirements rather than as a recommendation,
+    under "Why use workspace-catalog binding": "Organizational and compliance requirements often specify that certain data must remain
+    accessible only in designated environments."
+  source: https://docs.databricks.com/aws/en/data-governance/unity-catalog/access-control/workspace-catalog-binding
+  checked: 2026-10-30
+
+question: >-
+  Are catalogs restricted to specific workspaces, or reachable from all workspaces on the metastore?
+
+options:
+  - key: open
+    label: OPEN — every workspace on the metastore sees every catalog
+    cost: one grant mistake is reachable from anywhere on the metastore
+    vendor_default: true
+    rule:
+      summary: |
+        no catalog has isolation mode ISOLATED
+      failure_message: >-
+        {catalog} is ISOLATED, but {adr} records OPEN. A binding exists that the target state
+        does not.
+      evaluator: catalog_isolation_open
+      enforceability: strong
+      scope: root
+      clouds: [aws, azure, gcp]
+
+  - key: isolated
+    label: ISOLATED — each catalog bound to the workspaces that may reach it
+    cost: a binding must exist before the catalog is usable, and one more object per catalog
+    rule:
+      summary: |
+        every catalog has isolation mode ISOLATED
+        ∧ a workspace binding exists for each
+      failure_message: >-
+        {catalog} is OPEN — every workspace on the metastore can reach it. See {adr}.
+      evaluator: catalog_isolation_isolated
+      enforceability: strong
+      scope: root
+      clouds: [aws, azure, gcp]
+
+  - key: bound-read-only
+    label: ISOLATED, and production is never writable from a lower environment
+    cost: >-
+      two classes of binding to keep right, and a read-only binding is silently useless to a
+      workspace that needs to write
+    # There is nothing to bind read-only to where every environment shares one
+    # workspace — a single one, or one per business unit — and the creating
+    # workspace is bound automatically: "the securable will have been
+    # automatically bound to the workspace it was created from."
+    available_when:
+      DEC-001a: [environment, both]
+    # **This option carries the product's own opinion**, which is why it does not
+    # ask which workspaces only consume. That question has no answer a team can
+    # give from memory — a binding names a numeric workspace id — and it has a
+    # better one already recorded: the environments, in order, with production
+    # last. A binding reaching production from anything below it may read and
+    # not write.
+    #
+    # It is `scope: estate` where its two siblings are `scope: root`, because it
+    # is the only one that correlates a catalog in one root with a binding
+    # declared in another.
+    rule:
+      summary: |
+        every catalog has isolation mode ISOLATED
+        ∧ a workspace binding exists for each
+        ∧ no binding from a lower environment may write to a production catalog
+      # One placeholder, three clauses, because the rule has three and a message
+      # naming a workspace could not be resolved for the two that are about the
+      # catalog alone — and an unresolvable message becomes a non-result
+      # rather than printing a hole. The catalog is the
+      # deviation's identity either way, and it is what a team goes and looks at.
+      failure_message: >-
+        {catalog} is not isolated, is bound to no workspace, or may be written from an
+        environment below the one it belongs to; {adr} records production as read-only
+        from below.
+      evaluator: catalog_isolation_read_only
+      uses: [environments]
+      enforceability: strong
+      scope: estate
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        the estate declares no catalogs or no workspace bindings, or the estate declaration does
+        not say which environment each root holds

@@ -1,0 +1,40 @@
+name: Smoke
+
+# Installs the skill with install.py, as a user does, then checks that the
+# installed copy runs: the shipped corpus validates, its modules are listed, and a walk of the
+# platform module starts and is abandoned.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  # The release runs these checks too, before it drafts anything.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Install the skill
+        run: printf '%s\n' "$RUNNER_TEMP/skill" | python3 install.py
+
+      - name: Validate the shipped corpus
+        run: cd "$RUNNER_TEMP/skill" && uv run --project scripts --locked scripts/validate.py corpus
+
+      - name: List the modules
+        run: cd "$RUNNER_TEMP/skill" && uv run --project scripts --locked scripts/session.py modules --corpus corpus
+
+      - name: Start a walk and abandon it
+        run: |
+          cd "$RUNNER_TEMP/skill"
+          REPO="$(mktemp -d)"
+          STATE="$(mktemp -d)/journal.json"
+          uv run --project scripts --locked scripts/session.py start --corpus corpus --module platform-core --repository "$REPO" --state "$STATE"
+          uv run --project scripts --locked scripts/session.py abandon --repository "$REPO" --state "$STATE"
+          test -z "$(ls -A "$REPO")"

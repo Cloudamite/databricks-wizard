@@ -1,0 +1,56 @@
+id: PRE-003
+kind: prescription
+title: The metastore carries no storage root
+provenance: shipped
+
+vendor:
+  strength: recommends
+  quote: >-
+    "Give preference to catalog-level storage as your primary unit of data isolation." The metastore
+    is not that unit. Under "Metastores": "Metastores provide regional isolation but are not
+    intended as default units of data isolation"; and "Metastore-level storage was required in early Unity Catalog environments
+    but is no longer required."
+  source: https://docs.databricks.com/aws/en/data-governance/unity-catalog/best-practices#managed-storage
+  checked: 2026-10-30
+
+# Two things this entry deliberately leaves out.
+#
+# **Schema-level roots are deferred.** A schema may carry a root of its own, and
+# under DEC-002's domain axis that is the only level where an environment could
+# get storage apart from its siblings. No entry measures it yet; the vendor calls
+# it an option, and module 1 calls it "granularity you rarely need".
+#
+# **A declined entry's metastore root is not measured either.** The vendor adds
+# "If you choose to create a metastore-level managed location, use a dedicated
+# bucket." Whether nothing else uses that storage is hard to read from an estate, so
+# declining this entry enforces nothing, not even that.
+decision: >-
+  The metastore declares no managed storage location. Every catalog declares its own, so the place a
+  managed table's files land is chosen per catalog and never inherited from a root every catalog
+  shares.
+
+why: >-
+  A metastore root is the one storage location every catalog without a root of its own falls back
+  to, so it is where environments and domains end up sharing cloud object storage without anyone
+  deciding they should. That storage's policy, key, versioning and lifecycle then cover all of them
+  at once, and
+  what keeps production apart from development is grants alone, not anything the cloud enforces.
+  Removing it makes the location a per-catalog choice. A catalog with no root of its own cannot be
+  created under such a metastore, which is why the second clause is part of the same state rather
+  than a separate one.
+
+rule:
+  summary: |
+    the metastore declares no storage root
+    ∧ every catalog declares a storage root of its own
+  failure_message: >-
+    {resource} does not hold managed storage at the catalog level as {adr} records it: it is the
+    metastore and declares a storage root, or it is a catalog and declares none.
+  evaluator: metastore_storage_root_absent
+  enforceability: strong
+  scope: estate
+  clouds: [aws, azure, gcp]
+  unevaluable_when: >-
+    the estate does not declare the metastore, which is the account's and usually created outside
+    it — then only the catalogs are measured — or a storage root is computed from a value unknown
+    until apply

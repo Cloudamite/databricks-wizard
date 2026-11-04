@@ -1,0 +1,81 @@
+id: DEC-006a
+kind: decision
+title: Destroy protection on production
+provenance: shipped
+
+vendor:
+  strength: silent
+  quote: >-
+    Databricks publishes no position on when to guard a catalog against destruction. The provider
+    supplies the mechanism and describes it only as what it does: force_destroy is "Delete catalog
+    regardless of its contents."
+  source: https://registry.terraform.io/providers/databricks/databricks/1.132.0/docs/resources/catalog
+  checked: 2026-09-20
+
+# Nothing to guard if the IaC layer does not own the catalog, so this is
+# entry-level rather than option-level: opting out of PRE-002 leaves the
+# question with no ground to stand on.
+available_when:
+  PRE-002: [accepted]
+
+question: >-
+  Is production guarded against destruction by the IaC layer, and development deliberately not?
+
+options:
+  - key: protected
+    label: PROTECTED — production securables are guarded against destruction, development is not
+    cost: >-
+      a deliberate production change that needs a replace must be unblocked by editing the
+      configuration first, which is an extra commit in an incident
+    # Production is the last environment DEC-002 recorded, read from there rather
+    # than asked for again: two records of one fact can disagree, and a team that
+    # renamed an environment in one place and not the other would get deviations
+    # against securables that never moved.
+    #
+    # The summary states the clause the analyzer can read. Whether a securable
+    # *declares a guard* is not in any plan — the mechanism is a configuration
+    # meta-argument the JSON format omits — and a summary claiming it would make
+    # the report's `expected` a claim nothing checked.
+    rule:
+      summary: |
+        no production catalog or schema may be deleted while it still holds data
+      failure_message: >-
+        {resource} is a production securable that may be deleted regardless of its contents;
+        {adr} records production as protected.
+      evaluator: destroy_protection_protected
+      uses: [environments]
+      enforceability: strong
+      scope: estate
+      substrates: [terraform]
+      clouds: [aws, azure, gcp]
+      # Two disclosures. The second is the analyzer's limit rather than the
+      # estate's, and it is stated at platform level like everything else here:
+      # what the analyzer reads is whether a securable says it may be deleted
+      # with data still in it, and a guard expressed any other way is one it
+      # cannot see. Which mechanisms those are is the evaluator's to know.
+      unevaluable_when: >-
+        which securables are production is not derivable from configuration — it follows the
+        recorded catalog axis, and an estate naming neither an environment nor a domain cannot
+        be read — or the securable states nothing about being deleted while it still holds
+        data, which leaves a guard expressed some other way impossible to rule out
+
+  - key: uniform
+    label: UNIFORM — no destruction guard anywhere; the pipeline is the control
+    cost: >-
+      a mistaken plan can destroy a production catalog, and the only thing standing in the way is
+      review of the plan output
+    rule:
+      summary: |
+        no catalog or schema declares a guard against destruction
+      failure_message: >-
+        {resource} declares a destruction guard; {adr} records none, so this one is
+        undocumented.
+      evaluator: destroy_protection_uniform
+      enforceability: strong
+      scope: root
+      substrates: [terraform]
+      clouds: [aws, azure, gcp]
+      unevaluable_when: >-
+        the estate declares no catalogs or schemas, or the securable states nothing about
+        being deleted while it still holds data, which leaves a guard expressed some other
+        way impossible to rule out

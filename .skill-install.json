@@ -1,0 +1,19 @@
+{
+  "include": [
+    "LIABILITY.md",
+    "LICENSE",
+    "SKILL.md",
+    "corpus",
+    "scripts"
+  ],
+  "post_install": [
+    {
+      "command": [
+        "python",
+        "${SKILL_DIR}/scripts/setup.py"
+      ],
+      "requires_project": false,
+      "description": "Have uv build the skill's locked Python environment (PyYAML) beside its scripts."
+    }
+  ]
+}
