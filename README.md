@@ -1,6 +1,6 @@
 # databricks-wizard
 
-https://github.com/user-attachments/assets/44d4cf52-fe75-4e63-aa35-7704f40dda79
+https://github.com/user-attachments/assets/fa9cd3f8-fdab-41f8-bc70-7e833869768d
 
 A Claude Code skill that walks a team through the architecture decisions for a Databricks lakehouse,
 and writes the answers as a set of ADRs: the target state an estate is measured against.
