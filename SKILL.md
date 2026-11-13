@@ -339,8 +339,9 @@ audit writes goes in `<repo>/audit/`:
 The snapshot holds no credential, but it names the team's workspaces, catalogs and schemas. Whether
 to commit the snapshot and the report is the team's call.
 
-The audit is four steps, each a command. The first only sets up the second: the reader is the one
-that reaches the network with the team's credentials, and the audit itself reads files only.
+The audit is three steps. The first two settle what to read and as whom; the third is one command,
+`audit_live.py`, which reads the account with the team's credentials and then measures what it read,
+from files only. A team without Claude runs the same command (the README says how).
 
 ### 1. Say which workspaces are the estate
 
@@ -409,40 +410,34 @@ reported unevaluated until they audit again with a profile that reaches the buck
 for them, and never fall back to it after a failed read. The principal needs
 `s3:GetBucketVersioning` and `s3:GetLifecycleConfiguration` on each bucket.
 
-### 3. Read the account
+### 3. Read and measure the account
 
 Say before running it that it reads the account and the buckets, as the two profiles, with read
-calls only.
+calls only, and then measures what it read. Run it from `<repo>`:
 
 ```bash
-uv run --project <skill>/scripts --locked --group audit <skill>/scripts/snapshot.py \
-    --declaration <repo>/audit/live.yaml --out <repo>/audit/snapshot.json \
+cd <repo> && uv run --project <skill>/scripts --locked --group audit <skill>/scripts/audit_live.py \
     --databricks-profile <profile> (--aws-profile <profile> | --no-storage)
 ```
 
 `--no-storage` only when the team picked "I can't read the buckets", and then no `--aws-profile`.
+It reads `platform/adr-set.yaml` and `audit/live.yaml`, and writes `audit/snapshot.json` and
+`audit/audit.json`.
 
 | Code | Meaning | What to do |
 |---|---|---|
-| `0` | every declared workspace and every bucket was read, and the snapshot written | go on to step 4 |
-| `2` | could not run, and **nothing was written** | **stop.** Show stderr. It names every workspace or bucket not read, with the reason, and the profile used |
+| `0` | read and measured: no deviation | report the result |
+| `1` | read and measured: deviations found — a measurement, not an error | report the result |
+| `2` | could not run, and **nothing was measured** | **stop.** Show stderr |
 
+Exit `2` comes before the read when the files are wrong: no declaration, a defective one, a
+defective set, or a workspace labelled with an environment the set does not record — the label is
+the team's to correct. It comes after the read starts when the account or a bucket could not be
+read: stderr names every workspace or bucket not read, with the reason, and the profile used.
 There is no partial snapshot. A declared workspace the account does not list usually means the
 profile reaches another account; one it lists but cannot read means the principal lacks access.
 Either way the remedy is the configuration, not the declaration. A bucket the AWS profile cannot
 read is the team's to fix, or to answer with "I can't read the buckets" — theirs to choose.
-
-### 4. Audit the snapshot
-
-```bash
-uv run --project <skill>/scripts --locked <skill>/scripts/audit.py \
-    --set <repo>/platform/adr-set.yaml --declaration <repo>/audit/live.yaml \
-    --snapshot <repo>/audit/snapshot.json --report <repo>/audit/audit.json
-```
-
-Exit `0` no deviation, `1` deviations found — a measurement, not an error — and `2` could not run,
-with no report written. A snapshot taken against a different declaration is refused with `2`,
-naming the difference: read the account again.
 
 ### Reporting the result
 

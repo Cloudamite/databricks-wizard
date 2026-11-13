@@ -7,6 +7,8 @@ names, and PRE-001's bound on noncurrent versions. None of it is about a plan or
 an account.
 """
 
+from wizard.validity import CannotRun
+
 # What separates a domain, a business unit or a layer from the rest of a name.
 # One character, fixed by the product and stated on the card that asks for the
 # environments, because a convention every team follows exactly is the only
@@ -48,6 +50,30 @@ def named_for(name, environment):
     """Whether a catalog is named for `environment`, under the environment axis
     (`prod`) or under both (`orders_prod`)."""
     return name == environment or name.endswith(f"{SEPARATOR}{environment}")
+
+
+def set_environments(document):
+    """The environments an ADR set records, in the order first recorded. Only an
+    adopted entry carries parameters: they are asked when an option is chosen."""
+    found = []
+    for entry in document.get("adrs") or ():
+        for environment in (entry.get("parameters") or {}).get(ENVIRONMENTS) or ():
+            if environment not in found:
+                found.append(environment)
+    return found
+
+
+def refuse_unrecorded(document, labels):
+    """`CannotRun` naming each of `labels` the set `document` does not record.
+
+    A label the set does not record matches no environment a rule asks about, so
+    the workspace it labels would be measured as if it held none."""
+    recorded = set_environments(document)
+    unrecorded = {label for label in labels if label and label not in recorded}
+    if unrecorded:
+        records = (f"it records {listed(recorded)}" if recorded
+                   else "it records no environment")
+        raise CannotRun(f"the set does not record {listed(unrecorded)}; {records}")
 
 
 def listed(names):

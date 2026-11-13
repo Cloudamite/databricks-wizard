@@ -84,6 +84,85 @@ is written. You need a Databricks profile that reaches your account console (`da
 its workspaces and their metastores. To include bucket versioning, you also need an AWS profile that
 can read the S3 buckets behind the storage roots. The audit writes its files to `audit/`.
 
+## Audit without Claude Code
+
+The audit needs no language model. It is one command you can run yourself.
+
+You need [uv](https://docs.astral.sh/uv/), a written platform set (`platform/adr-set.yaml` in your
+ADR monorepo), and the profiles listed under [Use](#use). Clone the last release:
+
+```sh
+git clone --branch release git@github.com:Cloudamite/databricks-wizard.git
+```
+
+**Once: say which workspaces are your estate.** The audit reads this from `audit/live.yaml` in your
+monorepo. Run the audit command below before the file exists. It writes `audit/live.yaml` for you to
+fill in, then stops without auditing. The file has an entry for each environment your platform set
+records, and lists your account's workspaces in a comment:
+
+```yaml
+schema_version: 1
+name: platform
+# The account's workspaces:
+#   acme-dev
+#   acme-prod
+#   acme-sandbox
+#   other-team
+workspaces:
+  - name:  # <fill here the name of the workspace for dev>
+    environment: dev
+  - name:  # <fill here the name of the workspace for prod>
+    environment: prod
+```
+
+Fill in each `name` from the list. Add an entry with only a `name` for each other workspace of your
+estate that holds no environment:
+
+```yaml
+workspaces:
+  - name: acme-dev
+    environment: dev
+  - name: acme-prod
+    environment: prod
+  - name: acme-sandbox
+```
+
+If your platform set shares one workspace between environments, the file has a single entry with no
+`environment` instead. If the command cannot list your workspaces, the comment says why, and you
+type the names yourself. The audit refuses the file until every `name` is filled in.
+
+Commit `audit/live.yaml`. Every later audit reuses it.
+
+**Each time: run the audit** from the monorepo:
+
+```sh
+uv run --project <clone>/scripts --locked --group audit <clone>/scripts/audit_live.py \
+    --databricks-profile <profile> --aws-profile <profile>
+```
+
+If you cannot read the buckets behind the storage roots (Databricks manages them, or they are in
+another AWS account), pass `--no-storage` in place of `--aws-profile`. Bucket versioning is then
+reported as unevaluated.
+
+The command reads the account with read calls only, then measures what it read. It prints a report
+for people to read and writes the structured one to `audit/audit.json`. What it read is kept in
+`audit/snapshot.json`.
+
+| Exit | Meaning |
+|---|---|
+| `0` | no deviations |
+| `1` | deviations found |
+| `2` | could not run, and nothing was measured. The message says why |
+
+It refuses before reading the account if `audit/live.yaml` is malformed, or if a workspace's
+environment is not one your platform set records. A workspace name the account does not have stops
+the read, naming it. A workspace you left out is listed in the report, but not measured.
+
+A report of 0 deviations does not mean the account conforms. Read all four counts: deviations,
+unevaluated, conformant and not enforced. A high unevaluated count means little was measured. The
+report also names the principal it read as. Anything that principal cannot see is missing from the
+snapshot, so it is not measured.
+
 ## What it decides
 
 - **`platform-core`**, the lakehouse foundations: how workspaces and catalogs are isolated, which

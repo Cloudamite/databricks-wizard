@@ -46,6 +46,7 @@ from wizard.live.evaluation import evaluate  # noqa: E402
 from wizard.divergence import LIVE  # noqa: E402
 from wizard.live.report import report  # noqa: E402
 from wizard.live.storage import unread_buckets  # noqa: E402
+from wizard.naming import refuse_unrecorded  # noqa: E402
 from wizard.rendering import render  # noqa: E402
 from wizard.report import render_human  # noqa: E402
 from wizard.validity import CannotRun  # noqa: E402
@@ -71,27 +72,45 @@ def main(argv=None):
     try:
         audited = audit(args.set_path, args.declaration, args.snapshot)
         write(args.report, json.dumps(audited, indent=2, ensure_ascii=False) + "\n")
-    except Defective as exc:
-        print(f"cannot audit: the {ARTEFACTS[exc.artefact]} is defective", file=sys.stderr)
-        print(render_human(exc.artefact, exc.failures), file=sys.stderr)
-        return CANNOT_RUN
-    except CannotRun as exc:
-        print(f"cannot run: {exc}", file=sys.stderr)
+    except REFUSALS as exc:
+        refuse(exc)
         return CANNOT_RUN
 
     print(render(audited))
     return DEVIATIONS_FOUND if audited["counts"]["deviations"] else NO_DEVIATION
 
 
+# What the audit refuses with, and how it says so, wherever it is run from
+# (`audit_live.py` too).
+REFUSALS = (Defective, CannotRun)
+
+
+def refuse(exc):
+    if isinstance(exc, Defective):
+        print(f"cannot audit: the {ARTEFACTS[exc.artefact]} is defective", file=sys.stderr)
+        print(render_human(exc.artefact, exc.failures), file=sys.stderr)
+    else:
+        print(f"cannot run: {exc}", file=sys.stderr)
+
+
+def checked(set_path, declaration_path):
+    """`(declaration, set document)`, or a refusal: what the audit refuses from
+    the files alone, before any snapshot. The declaration first, then the set,
+    then the labels the declaration gives."""
+    declaration = live_declaration.read(declaration_path)
+    document = validated(adr_set, "adr-set", set_path)
+    refuse_unrecorded(document, [workspace.get("environment")
+                                 for workspace in declaration["workspaces"]])
+    return declaration, document
+
+
 def audit(set_path, declaration_path, snapshot_path):
     """The report of one audit, or a refusal before anything is measured.
 
-    The declaration first, then the set, then
-    the snapshot and whether it describes the declaration: one run reports one
-    thing, the earliest wrong.
+    The files first (`checked`), then the snapshot and whether it describes the
+    declaration: one run reports one thing, the earliest wrong.
     """
-    declaration = live_declaration.read(declaration_path)
-    document = validated(adr_set, "adr-set", set_path)
+    declaration, document = checked(set_path, declaration_path)
     snapshot = read_snapshot(snapshot_path)
     found = mismatches(snapshot, declaration)
     if found:

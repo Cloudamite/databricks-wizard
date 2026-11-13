@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from wizard import adr_set, live_declaration, profiles  # noqa: E402
 from wizard.analysis import Defective, validated  # noqa: E402
 from wizard.files import write  # noqa: E402
-from wizard.naming import ENVIRONMENTS, listed  # noqa: E402
+from wizard.naming import refuse_unrecorded  # noqa: E402
 from wizard.report import render_human  # noqa: E402
 from wizard.validity import CannotRun, Refused  # noqa: E402
 
@@ -145,13 +145,8 @@ def _value(field):
 def declare(set_path, out, given, replace):
     """Write the declaration of the workspaces `given`, and return where."""
     document = validated(adr_set, "adr-set", set_path)
-    recorded = environments(document)
     picked = _picked(given)
-    unrecorded = sorted({label for _, label in picked if label and label not in recorded})
-    if unrecorded:
-        records = (f"it records {listed(recorded)}" if recorded
-                   else "it records no environment")
-        raise CannotRun(f"the set does not record {listed(unrecorded)}; {records}")
+    refuse_unrecorded(document, [label for _, label in picked])
 
     declaration = {
         "schema_version": 1,
@@ -170,17 +165,6 @@ def declare(set_path, out, given, replace):
     out.parent.mkdir(parents=True, exist_ok=True)
     write(out, yaml.safe_dump(declaration, sort_keys=False, allow_unicode=True))
     return out
-
-
-def environments(document):
-    """The environments the set records, in the order first recorded. Only an adopted
-    entry carries parameters: they are asked when an option is chosen."""
-    found = []
-    for entry in document.get("adrs") or ():
-        for environment in (entry.get("parameters") or {}).get(ENVIRONMENTS) or ():
-            if environment not in found:
-                found.append(environment)
-    return found
 
 
 def _picked(given):
