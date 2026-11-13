@@ -1,6 +1,6 @@
 {
   "name": "databricks-wizard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Establish a Databricks target state as an ADR set: walk a platform or product team through the lakehouse decisions, validate the set, and audit a live Databricks account against it.",
   "author": {
     "name": "Cloudamite",
